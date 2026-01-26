@@ -1,0 +1,9 @@
+concepts:
+  - name: rule_free_space
+    index: 0
+  - name: rule_cable_routing
+    index: 1
+  - name: rule_alignment
+    index: 2
+  - name: rule_covering
+    index: 3
