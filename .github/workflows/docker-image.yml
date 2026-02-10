@@ -1,0 +1,25 @@
+name: Build & Push Flask API to dockerhub
+
+on:
+  push:
+    branches: ["main"]
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build image
+        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/kpn_ai_tool_server:latest .
+
+      - name: Push image
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/kpn_ai_tool_server:latest
