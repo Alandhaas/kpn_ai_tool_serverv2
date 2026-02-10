@@ -16,7 +16,10 @@ def health():
 
 
 @router.post("/infer", response_model=InferenceResponse)
-async def infer(request: Request, file: UploadFile = File(...)):
+async def infer(
+    request: Request,
+    file: UploadFile = File(...),
+):
     # Basic content-type validation
     if file.content_type not in {"image/jpeg", "image/png", "image/webp"}:
         raise HTTPException(status_code=415, detail="Unsupported image type")
@@ -39,7 +42,10 @@ async def infer(request: Request, file: UploadFile = File(...)):
     return out
 
 @router.post("/infer/gradcam")
-async def infer_gradcam(request: Request, file: UploadFile = File(...)):
+async def infer_gradcam(
+    request: Request,
+    file: UploadFile = File(...),
+):
     if file.content_type not in {"image/jpeg", "image/png", "image/webp"}:
         raise HTTPException(status_code=415, detail="Unsupported image type")
 

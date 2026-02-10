@@ -62,3 +62,21 @@ class ConceptHead(nn.Module):
         if return_fused:
             return logits, x
         return logits
+
+
+class ThresholdAwareFinalHead(nn.Module):
+    def __init__(self, thr_logit: torch.Tensor):
+        super().__init__()
+        K = thr_logit.numel()
+        self.register_buffer("thr_logit", thr_logit)
+        self.w = nn.Parameter(torch.ones(K))
+        self.b = nn.Parameter(torch.tensor(0.0))
+        self.alpha = nn.Parameter(torch.tensor(8.0))
+        self.delta = nn.Parameter(torch.full((K,), 0.5))
+
+    def forward(self, logits: torch.Tensor) -> torch.Tensor:
+        d = logits - self.thr_logit
+        neg = F.relu(-d)
+        gate = torch.sigmoid(self.alpha * (torch.abs(d) - self.delta))
+        penalty = (neg * gate * self.w).sum(dim=1)
+        return self.b - penalty

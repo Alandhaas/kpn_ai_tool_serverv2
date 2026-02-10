@@ -3,5 +3,6 @@
   "rule_cable_routing": 0.4427916991710663,
   "rule_alignment": 0.03925845413026592,
   "rule_covering": 0.5199999999999996,
-  "threshold_epoch": 25
+  "threshold_epoch": 25,
+  "threshold_final_classifier": 0.55
 }

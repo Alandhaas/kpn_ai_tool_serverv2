@@ -24,6 +24,7 @@ class InferenceService:
         self.thresholds = thresholds
         self.concept_order = concept_order
         self.device = settings.device_torch
+        self.final_threshold = float(thresholds.get("threshold_final_classifier", 0.5))
 
     # ---------------------------------------------------------
     # Standard inference (NO Grad-CAM)
@@ -47,13 +48,24 @@ class InferenceService:
             x,
         )
 
-        return apply_thresholds(
+        results = apply_thresholds(
             logits=logits,
             thresholds=self.thresholds,
             concept_order=self.concept_order,
         )
+
+        final_logit = self.models.final_head(logits)
+        final_prob = torch.sigmoid(final_logit)[0].item()
+        final_pred = bool(final_prob >= self.final_threshold)
+
+        results["final_prob"] = float(final_prob)
+        results["final_pred"] = final_pred
+        results["final_threshold"] = float(self.final_threshold)
+        return results
     
-    def predict_witch_gradcam(self, img_rgb: np.ndarray) -> Tuple[List[np.ndarray], Dict, bool]:
+    def predict_witch_gradcam(
+        self, img_rgb: np.ndarray
+    ) -> Tuple[List[np.ndarray], Dict, bool, Dict]:
         x = preprocess_image(img_rgb, settings.img_size).to(self.device)
 
         feats = self.models.feature_extractor(x)
@@ -61,6 +73,9 @@ class InferenceService:
         fused.retain_grad()
 
         probs = torch.sigmoid(logits)[0].detach().cpu().numpy()
+        final_logit = self.models.final_head(logits)
+        final_prob = torch.sigmoid(final_logit)[0].item()
+        final_pred = bool(final_prob >= self.final_threshold)
 
         tiles = []
         per_concept = {}
@@ -97,7 +112,12 @@ class InferenceService:
             logits, fused = self.models.concept_head(feats, return_fused=True)
             fused.retain_grad()
 
-        return tiles, per_concept, final_ok
+        final_result = {
+            "final_prob": float(final_prob),
+            "final_pred": final_pred,
+            "final_threshold": float(self.final_threshold),
+        }
+        return tiles, per_concept, final_ok, final_result
             
 
     # ---------------------------------------------------------
@@ -107,7 +127,7 @@ class InferenceService:
         """
         Returns: (json_result, png_bytes)
         """
-        tiles, per_concept, final_ok = self.predict_witch_gradcam(img_rgb)
+        tiles, per_concept, final_ok, final_result = self.predict_witch_gradcam(img_rgb)
 
         if not tiles:
             raise ValueError("No Grad-CAM tiles generated")
@@ -124,7 +144,7 @@ class InferenceService:
         Image.fromarray(montage).save(buf, format="PNG")
         png_bytes = buf.getvalue()
 
-        json_result = {"final_ok": final_ok, "per_concept": per_concept}
+        json_result = {"final_ok": final_ok, "per_concept": per_concept, **final_result}
         return json_result, png_bytes
     
 
@@ -144,11 +164,12 @@ class InferenceService:
         zip_buf = io.BytesIO()
         with zipfile.ZipFile(zip_buf, mode="w", compression=zipfile.ZIP_DEFLATED) as zip_file:
             for idx, img_rgb in enumerate(img_list):
-                tiles, per_concept, final_ok = self.predict_witch_gradcam(img_rgb)
+                tiles, per_concept, final_ok, final_result = self.predict_witch_gradcam(img_rgb)
                 image_entry = {
                     "image_index": idx + 1,
                     "final_ok": final_ok,
                     "per_concept": per_concept,
+                    **final_result,
                     "files": [],
                 }
                 x = preprocess_image(img_rgb, settings.img_size).squeeze(0)

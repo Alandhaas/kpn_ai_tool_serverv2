@@ -4,7 +4,7 @@ import torch
 from safetensors.torch import load_file
 
 from app.core.config import settings
-from app.ml.model_defs import ConvNeXtFeatures, ConceptHead
+from app.ml.model_defs import ConvNeXtFeatures, ConceptHead, ThresholdAwareFinalHead
 
 logger = logging.getLogger(__name__)
 
@@ -15,10 +15,11 @@ class ModelBundle:
     Wordt 1x aangemaakt bij app startup.
     """
 
-    def __init__(self, backbone, feature_extractor, concept_head):
+    def __init__(self, backbone, feature_extractor, concept_head, final_head):
         self.backbone = backbone
         self.feature_extractor = feature_extractor
         self.concept_head = concept_head
+        self.final_head = final_head
 
 
 def load_models() -> ModelBundle:
@@ -65,10 +66,20 @@ def load_models() -> ModelBundle:
     )
     concept_head.to(device).eval()
 
+    # =====================
+    # Final classifier head
+    # =====================
+    logger.info(f"Loading final classifier: {settings.final_classifier_path}")
+    final_ckpt = torch.load(settings.final_classifier_path, map_location="cpu")
+    final_head = ThresholdAwareFinalHead(final_ckpt["thr_logit"])
+    final_head.load_state_dict(final_ckpt["final_head_state"], strict=True)
+    final_head.to(device).eval()
+
     logger.info("Models loaded successfully")
 
     return ModelBundle(
         backbone=backbone,
         feature_extractor=feature_extractor,
         concept_head=concept_head,
+        final_head=final_head,
     )

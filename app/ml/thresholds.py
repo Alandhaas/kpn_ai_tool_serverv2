@@ -25,8 +25,12 @@ def load_thresholds() -> Dict[str, float]:
             if value is None or value != value:  # NaN check
                 raise ValueError(f"Invalid threshold for {key}")
             thresholds[key] = float(value)
+        if key == "threshold_final_classifier":
+            if value is None or value != value:
+                raise ValueError("Invalid threshold for threshold_final_classifier")
+            thresholds[key] = float(value)
 
-    if not thresholds:
+    if not any(k.startswith("rule_") for k in thresholds.keys()):
         raise ValueError("No rule_* thresholds found in thresholds.json")
 
     return thresholds

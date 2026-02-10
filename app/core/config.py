@@ -38,6 +38,10 @@ class Settings(BaseSettings):
         return self.models_dir / "base_backbone_concept_head.pth"
 
     @property
+    def final_classifier_path(self) -> Path:
+        return self.models_dir / "final_classifier_head.pth"
+
+    @property
     def thresholds_path(self) -> Path:
         return self.configs_dir / "thresholds.json"
 
