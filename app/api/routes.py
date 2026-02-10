@@ -1,14 +1,32 @@
 import io
 import json
 import zipfile
+from datetime import datetime, timezone, date
+from uuid import uuid4
 import numpy as np
 from PIL import Image
 from fastapi import APIRouter, File, UploadFile, HTTPException, Request, Form
 from fastapi.responses import Response
 
-from app.api.schemas import InferenceResponse, GradCamResponse
+from app.api.schemas import InferenceResponse
+from app.services.review_store import (
+    ReviewEntry,
+    append_review_entry,
+    list_reviews,
+    load_review_zip,
+    save_review_zip,
+)
 
 router = APIRouter()
+
+def _parse_date(date_str: str | None) -> str:
+    if not date_str:
+        return datetime.now(timezone.utc).date().isoformat()
+    try:
+        date.fromisoformat(date_str)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid date format (YYYY-MM-DD)")
+    return date_str
 
 @router.get("/health")
 def health():
@@ -97,5 +115,49 @@ async def infer_gradcam_zip(
 
     service = request.app.state.inference_service
     zip_bytes = service.predict_with_gradcam_zip_bytes(img_rgb)
+
+    review_uuid = uuid4().hex
+    created_at = datetime.now(timezone.utc).isoformat()
+    date_str = created_at.split("T")[0]
+    probability = 0.0
+    try:
+        with zipfile.ZipFile(io.BytesIO(zip_bytes), mode="r") as zf:
+            meta_raw = zf.read("metadata.json")
+            meta = json.loads(meta_raw)
+            if isinstance(meta, list) and meta:
+                probability = float(meta[0].get("final_prob", 0.0))
+    except Exception:
+        probability = 0.0
+
+    entry = ReviewEntry(
+        uuid=review_uuid,
+        user=(username or "anonymous").strip() or "anonymous",
+        probability=probability,
+        created_at=created_at,
+    )
+    save_review_zip(date_str, review_uuid, zip_bytes)
+    append_review_entry(date_str, entry)
+
     headers = {"Content-Disposition": "attachment; filename=gradcam.zip"}
+    return Response(content=zip_bytes, media_type="application/zip", headers=headers)
+
+
+@router.get("/review/list")
+async def review_list(date: str | None = None):
+    date_str = _parse_date(date)
+    scans = list_reviews(date_str)
+    return {"date": date_str, "scans": scans}
+
+
+@router.get(
+    "/review/zip/{review_uuid}",
+    response_class=Response,
+    responses={200: {"content": {"application/zip": {}}}},
+)
+async def review_zip(review_uuid: str, date: str | None = None):
+    date_str = _parse_date(date)
+    zip_bytes = load_review_zip(date_str, review_uuid)
+    if not zip_bytes:
+        raise HTTPException(status_code=404, detail="Review not found")
+    headers = {"Content-Disposition": f"attachment; filename={review_uuid}.zip"}
     return Response(content=zip_bytes, media_type="application/zip", headers=headers)

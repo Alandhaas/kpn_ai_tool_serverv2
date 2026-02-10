@@ -12,6 +12,7 @@ build/
 *.egg-info/
 logs/
 outputs/
+data/
 *.safetensors
 *.ckpt
 *.pt

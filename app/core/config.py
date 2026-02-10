@@ -50,6 +50,14 @@ class Settings(BaseSettings):
         return self.configs_dir / "concepts.yaml"
 
     @property
+    def data_dir(self) -> Path:
+        return Path.home() / "kpn_ai_tool_server_data"
+
+    @property
+    def reviews_dir(self) -> Path:
+        return self.data_dir / "reviews"
+
+    @property
     def device_torch(self) -> torch.device:
         if self.device == "cpu":
             return torch.device("cpu")
